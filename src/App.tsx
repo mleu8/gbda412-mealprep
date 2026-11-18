@@ -9,7 +9,7 @@ import {
 type Status = 'idle' | 'heating' | 'cooling' | 'offline'
 type Container = {
   id: string; name: string; size: string; owner: string; mealId: string | null;
-  battery: number; temperature: number; target: number; status: Status; ready: boolean
+  battery: number; temperature: number; restingTemperature: number; target: number; status: Status; ready: boolean; readyAt: string
 }
 type Ingredient = { name: string; grams: number }
 type Meal = {
@@ -45,9 +45,9 @@ const iso = (offset: number) => {
 
 const seedState = () => ({
   containers: [
-    { id:'c1', name:'Container 1', size:'Medium · 900 ml', owner:'Kenzie', mealId:'m1', battery:78, temperature:4, target:55, status:'cooling' as Status, ready:true },
-    { id:'c2', name:'Container 2', size:'Large · 1200 ml', owner:'Kenzie', mealId:'m2', battery:54, temperature:72, target:72, status:'idle' as Status, ready:false },
-    { id:'c3', name:'Container 3', size:'Small · 600 ml', owner:'Sam', mealId:null, battery:91, temperature:20, target:20, status:'offline' as Status, ready:false },
+    { id:'c1', name:'Container 1', size:'Medium · 900 ml', owner:'Kenzie', mealId:'m1', battery:78, temperature:4, restingTemperature:4, target:55, status:'idle' as Status, ready:true, readyAt:'12:05' },
+    { id:'c2', name:'Container 2', size:'Large · 1200 ml', owner:'Kenzie', mealId:'m2', battery:54, temperature:72, restingTemperature:72, target:72, status:'idle' as Status, ready:false, readyAt:'07:55' },
+    { id:'c3', name:'Container 3', size:'Small · 600 ml', owner:'Sam', mealId:null, battery:91, temperature:20, restingTemperature:20, target:20, status:'offline' as Status, ready:false, readyAt:'12:30' },
   ] as Container[],
   meals: [
     { id:'m1', name:'Teriyaki salmon bowl', ingredients:[{name:'Cooked salmon',grams:180},{name:'White rice',grams:200},{name:'Broccoli',grams:120},{name:'Edamame',grams:80}], servings:1, cooked:iso(0), eatBy:iso(2), containerId:'c1', eatingDate:iso(0), eatingTime:'12:30', category:'Lunch', notes:'Add extra sesame seeds.', reminder:true },
@@ -99,7 +99,15 @@ export default function App() {
   useEffect(() => {
     const interval = window.setInterval(() => {
       setContainers(current => current.map(c => {
-        if (c.status === 'offline' || c.status === 'idle') return c
+        if (c.status === 'offline') return c
+        if (c.status === 'idle') {
+          if (!c.ready || !c.readyAt) return c
+          const now=new Date()
+          const nowMinutes=now.getHours()*60+now.getMinutes()
+          const [hours,minutes]=c.readyAt.split(':').map(Number)
+          if (nowMinutes >= hours*60+minutes) return {...c,status:'heating'}
+          return c
+        }
         const step = c.status === 'heating' ? 1 : -1
         const next = c.temperature + step
         if ((c.status === 'heating' && next >= c.target) || (c.status === 'cooling' && next <= c.target)) {
@@ -145,7 +153,7 @@ export default function App() {
   return (
     <div className="app-shell">
       <main className="phone-frame">
-        {tab==='home' && <HomeScreen meals={meals} containers={containers} preferences={preferences} onMeal={openMeal} onAdd={newMeal} onPair={()=>setModal('pair')} onContainer={setDetailId} onNotify={notify} />}
+        {tab==='home' && <HomeScreen meals={meals} containers={containers} preferences={preferences} onMeal={openMeal} onAdd={newMeal} onPair={()=>setModal('pair')} onContainer={setDetailId} onNotify={notify} onUpdate={(id,patch)=>setContainers(cs=>cs.map(c=>c.id===id?{...c,...patch}:c))} />}
         {tab==='containers' && <ContainersScreen containers={containers} meals={meals} onDetail={setDetailId} onPair={()=>setModal('pair')} onAssign={assignMeal} onRename={(id,name)=>{setContainers(cs=>cs.map(c=>c.id===id?{...c,name}:c));notify('Container renamed')}} onOwner={(id,owner)=>{setContainers(cs=>cs.map(c=>c.id===id?{...c,owner}:c));notify('Owner updated')}} />}
         {tab==='planner' && <PlannerScreen meals={meals} containers={containers} selectedDay={selectedDay} setSelectedDay={setSelectedDay} onEdit={openMeal} onAdd={newMeal} onSchedule={(meal)=>{setEditingMeal(meal);setModal('schedule')}} onRemoveSchedule={(meal)=>{setMeals(ms=>ms.map(m=>m.id===meal.id?{...m,eatingDate:null}:m));notify('Removed from planner')}} />}
         {tab==='nutrition' && <NutritionScreen meals={meals} selectedDay={selectedDay} preferences={preferences} />}
@@ -159,7 +167,7 @@ export default function App() {
         setModal(null); notify(editingMeal?'Meal updated':'Meal added')
       }} onDelete={(id)=>{setMeals(ms=>ms.filter(m=>m.id!==id));setContainers(cs=>cs.map(c=>c.mealId===id?{...c,mealId:null,status:'idle'}:c));setModal(null);notify('Meal deleted')}} />}
       {modal==='pair' && <PairModal onClose={()=>setModal(null)} onPair={(name,size,owner)=>{
-        setContainers(cs=>[...cs,{id:'c'+Date.now(),name,size,owner,mealId:null,battery:100,temperature:20,target:20,status:'idle',ready:false}]);setModal(null);notify('Container paired')
+        setContainers(cs=>[...cs,{id:'c'+Date.now(),name,size,owner,mealId:null,battery:100,temperature:20,restingTemperature:20,target:55,status:'idle',ready:false,readyAt:'12:30'}]);setModal(null);notify('Container paired')
       }} />}
       {modal==='preferences' && <PreferencesModal preferences={preferences} onClose={()=>setModal(null)} onSave={(p)=>{setPreferences(p);setModal(null);notify('Preferences saved')}} onReset={resetDemo} />}
       {modal==='schedule' && editingMeal && <ScheduleModal meal={editingMeal} onClose={()=>setModal(null)} onSave={(date,time,category)=>{
@@ -181,7 +189,32 @@ export default function App() {
   )
 }
 
-function HomeScreen({meals,containers,preferences,onMeal,onAdd,onPair,onContainer,onNotify}:{meals:Meal[];containers:Container[];preferences:Preferences;onMeal:(m:Meal)=>void;onAdd:()=>void;onPair:()=>void;onContainer:(id:string)=>void;onNotify:(m:string)=>void}) {
+function SwipeToHeat({onHeat}:{onHeat:()=>void}) {
+  const [progress,setProgress]=useState(0)
+  return <div className="swipe-heat" onClick={e=>e.stopPropagation()}>
+    <div className="swipe-track">
+      <span className="swipe-track-icon"><Flame size={17}/></span>
+      <span className="swipe-track-text">Swipe to heat now</span>
+      <input
+        aria-label="Swipe to start heating now"
+        type="range"
+        min="0"
+        max="100"
+        value={progress}
+        onChange={e=>{
+          const next=Number(e.target.value)
+          setProgress(next)
+          if(next>=92){
+            onHeat()
+            window.setTimeout(()=>setProgress(0),180)
+          }
+        }}
+      />
+    </div>
+  </div>
+}
+
+function HomeScreen({meals,containers,preferences,onMeal,onAdd,onPair,onContainer,onNotify,onUpdate}:{meals:Meal[];containers:Container[];preferences:Preferences;onMeal:(m:Meal)=>void;onAdd:()=>void;onPair:()=>void;onContainer:(id:string)=>void;onNotify:(m:string)=>void;onUpdate:(id:string,patch:Partial<Container>)=>void}) {
   const upcoming=[...meals].filter(m=>m.eatingDate&&!m.eaten).sort((a,b)=>`${a.eatingDate}${a.eatingTime}`.localeCompare(`${b.eatingDate}${b.eatingTime}`))[0]
   const container=upcoming?containers.find(c=>c.id===upcoming.containerId):undefined
   return <div className="content">
@@ -196,15 +229,28 @@ function HomeScreen({meals,containers,preferences,onMeal,onAdd,onPair,onContaine
     {upcoming ? <article className="card sage-card" style={{width:'100%',textAlign:'left',padding:20,border:'0',cursor:'pointer'}} onClick={()=>onMeal(upcoming)} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')onMeal(upcoming)}} role="button" tabIndex={0}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:18}}>
         <span className="pill"><span className="status-dot"/>Connected</span>
-        <span style={{fontSize:12,letterSpacing:1,fontWeight:800}}>{container?.name || 'No container'} · {container?.owner || preferences.owner}</span>
+        <div style={{display:'flex',alignItems:'center',gap:7}}>
+          <span style={{fontSize:12,letterSpacing:1,fontWeight:800}}>{container?.name || 'No container'} · {container?.owner || preferences.owner}</span>
+          {container && <button className="home-container-icon" aria-label="Open heat and cool settings" onClick={e=>{e.stopPropagation();onContainer(container.id)}}><Thermometer size={17}/></button>}
+        </div>
       </div>
       <div className="eyebrow" style={{color:'#dce9e3'}}>{upcoming.category}'s meal</div>
       <h2 style={{fontSize:21,margin:'5px 0 3px'}}>{upcoming.name}</h2>
       <div style={{display:'flex',alignItems:'center',gap:7,color:'#e5eee9',fontSize:13}}><Clock3 size={15}/> Ready at {formatTime(upcoming.eatingTime)}</div>
-      <div style={{marginTop:18,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <div><div className="eyebrow" style={{color:'#dce9e3'}}>Temperature</div><b>{container ? `${container.temperature}°C` : 'No container'}</b></div>
-        {container && <button className="secondary-button" onClick={(e)=>{e.stopPropagation();onContainer(container.id)}}><Flame size={17}/> View container</button>}
-      </div>
+      {container && <div className="home-temperature">
+        <div className="home-temp-card">
+          <span>Current</span>
+          <div><button aria-label="Decrease current temperature" onClick={e=>{e.stopPropagation();onUpdate(container.id,{temperature:container.temperature-1,status:'idle',ready:false})}}>−</button><b>{container.temperature}°C</b><button aria-label="Increase current temperature" onClick={e=>{e.stopPropagation();onUpdate(container.id,{temperature:container.temperature+1,status:'idle',ready:false})}}>+</button></div>
+        </div>
+        <div className="home-temp-card">
+          <span>Heat to</span>
+          <div><button aria-label="Decrease target temperature" onClick={e=>{e.stopPropagation();onUpdate(container.id,{target:Math.max(-10,container.target-1)})}}>−</button><b>{container.target}°C</b><button aria-label="Increase target temperature" onClick={e=>{e.stopPropagation();onUpdate(container.id,{target:Math.min(90,container.target+1)})}}>+</button></div>
+        </div>
+      </div>}
+      {container && <SwipeToHeat onHeat={()=>{
+        onUpdate(container.id,{status:'heating',ready:false})
+        onNotify(`${container.name} heating started manually`)
+      }}/>}
     </article> : <div className="card empty-state">No scheduled meals yet.</div>}
 
     <div className="section-heading"><h2>Today’s reminders</h2></div>
@@ -280,7 +326,7 @@ function ContainerDetail({id,containers,meals,onClose,onUpdate,onMeal,onMarkEate
   const c=containers.find(x=>x.id===id)
   if (!c) return null
   const meal=meals.find(m=>m.id===c.mealId)
-  const setMode=(status:'heating'|'cooling')=>onUpdate(c.id,{status,target:status==='heating'?55:4,temperature:c.temperature})
+  const setMode=(status:'heating'|'cooling')=>onUpdate(c.id,{status,target:status==='heating'?c.target:4,temperature:c.temperature,ready:false})
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label={`${c.name} controls`}>
     <section className="modal">
       <div className="modal-header"><button className="icon-button" onClick={onClose} aria-label="Back"><X/></button><b>{c.name}</b><span className="muted" style={{fontSize:12}}>{c.status}</span></div>
@@ -288,18 +334,21 @@ function ContainerDetail({id,containers,meals,onClose,onUpdate,onMeal,onMarkEate
         <div style={{position:'relative',zIndex:1}}><div className="eyebrow" style={{color:'#bcd0c7'}}>Owner</div><b>{c.owner}</b><h2 style={{margin:'14px 0 4px'}}>{meal?.name || 'Empty container'}</h2><div style={{fontSize:12,color:'#cbd9d3'}}>Eat by {meal?formatDate(meal.eatBy,{month:'short',day:'numeric'}):'—'}</div><div style={{fontSize:40,fontWeight:800,marginTop:18}}>{c.temperature}°C</div></div>
       </div>
       <div className="card meal-card" style={{marginTop:12}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><b>Target temperature</b><b>{c.target}°C</b></div>
-        <div className="temp-control" style={{margin:'12px 0'}}><button aria-label="Decrease target" onClick={()=>onUpdate(c.id,{target:Math.max(-10,c.target-1)})}>−</button><div><Thermometer size={18} style={{display:'inline'}}/> Demo setting</div><button aria-label="Increase target" onClick={()=>onUpdate(c.id,{target:Math.min(90,c.target+1)})}>+</button></div>
+        <div className="detail-temp-row"><span><b>Current temperature</b><small>Manual reading</small></span><div className="temp-control"><button aria-label="Decrease current temperature" onClick={()=>onUpdate(c.id,{temperature:Math.max(-10,c.temperature-1),status:'idle',ready:false})}>−</button><b>{c.temperature}°C</b><button aria-label="Increase current temperature" onClick={()=>onUpdate(c.id,{temperature:Math.min(90,c.temperature+1),status:'idle',ready:false})}>+</button></div></div>
+        <div className="detail-temp-row"><span><b>Resting temperature</b><small>While waiting</small></span><div className="temp-control"><button aria-label="Decrease resting temperature" onClick={()=>onUpdate(c.id,{restingTemperature:Math.max(-10,c.restingTemperature-1)})}>−</button><b>{c.restingTemperature}°C</b><button aria-label="Increase resting temperature" onClick={()=>onUpdate(c.id,{restingTemperature:Math.min(90,c.restingTemperature+1)})}>+</button></div></div>
+        <div className="detail-temp-row"><span><b>Heat to</b><small>Scheduled target</small></span><div className="temp-control"><button aria-label="Decrease target" onClick={()=>onUpdate(c.id,{target:Math.max(-10,c.target-1)})}>−</button><b>{c.target}°C</b><button aria-label="Increase target" onClick={()=>onUpdate(c.id,{target:Math.min(90,c.target+1)})}>+</button></div></div>
         <div className="segmented">
           <button className={c.status==='heating'?'active':''} onClick={()=>setMode('heating')}><Flame size={16}/> Heat</button>
           <button className={c.status==='cooling'?'active':''} onClick={()=>setMode('cooling')}><Snowflake size={16}/> Cool</button>
-          <button onClick={()=>onUpdate(c.id,{status:'idle'})}>Stop</button>
+          <button onClick={()=>onUpdate(c.id,{status:'idle',ready:false})}>Stop</button>
         </div>
       </div>
       <div className="card meal-card">
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><div><b>Ready for scheduled time</b><div className="muted" style={{fontSize:12}}>Simulated timing</div></div><button className={`toggle ${c.ready?'on':''}`} aria-label="Toggle ready for scheduled time" onClick={()=>onUpdate(c.id,{ready:!c.ready})}><span/></button></div>
+        <div className="field ready-at-field"><label htmlFor={`ready-at-${c.id}`}>Automatically start heating at</label><input id={`ready-at-${c.id}`} type="time" value={c.readyAt} onChange={e=>onUpdate(c.id,{readyAt:e.target.value,ready:true,status:'idle'})}/></div>
         <div className="muted" style={{fontSize:12,marginTop:12}}><BatteryMedium size={14} style={{verticalAlign:'middle'}}/> {c.battery}% battery · <Bluetooth size={14} style={{verticalAlign:'middle'}}/> Simulated connection</div>
       </div>
+      <SwipeToHeat onHeat={()=>onUpdate(c.id,{status:'heating',ready:false})}/>
       {meal && <div className="quick-grid"><button className="secondary-button" onClick={()=>onMeal(meal)}><Pencil size={16}/> Edit meal</button><button className="lime-card card" onClick={()=>onMarkEaten(meal)}><CircleCheck size={16}/> Mark eaten</button></div>}
       <p className="muted" style={{fontSize:11,margin:'14px 4px'}}>Temperature controls are demos, not validated food safety guidance.</p>
     </section>
