@@ -25,3 +25,8 @@ npm run preview
 - Nutritional values are estimates from a small local ingredient database.
 - Temperature controls are demo interactions only, not validated food-safety guidance.
 - Use `Reset demo data` in Preferences to restore the sample app state.
+
+## GitHub Pages
+
+The Vite build uses relative asset paths so it can be served from a project Pages URL such
+as `https://mleu8.github.io/gbda412-mealprep/`.
