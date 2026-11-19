@@ -3,7 +3,7 @@ import {
   Apple, BatteryMedium, Bluetooth, CircleCheck, Clock3,
   Flame, Home, Leaf, Plus, Snowflake, Thermometer, Trash2,
   Utensils, X, CalendarDays, Container as ContainerIcon, Pencil,
-  Droplets, Dumbbell, Salad, Settings2
+  Droplets, Dumbbell, Salad, Settings2, Soup, Sandwich, Cookie
 } from 'lucide-react'
 
 type Status = 'idle' | 'heating' | 'cooling' | 'offline'
@@ -264,11 +264,14 @@ function HomeScreen({meals,containers,preferences,onMeal,onAdd,onPair,onContaine
     </button>)}
 
     <div className="section-heading"><h2>Approaching eat-by</h2></div>
-    {meals.filter(m=>m.eatBy<=iso(1)&&!m.eaten).slice(0,5).map(m=>(
+    {meals.filter(m=>m.eatBy<=iso(1)&&!m.eaten).slice(0,5).map((m,index)=>{
+      const icons=[<Soup size={20}/>,<Salad size={20}/>,<Sandwich size={20}/>,<Cookie size={20}/>,<Utensils size={20}/>]
+      return (
       <button key={m.id} className="card meal-card" style={{width:'100%',textAlign:'left'}} onClick={()=>onMeal(m)}>
-        <div className="meal-row"><span className="meal-icon"><Utensils size={20}/></span><div style={{flex:1}}><b>{m.name}</b><div className="muted" style={{fontSize:12}}>Eat by {formatDate(m.eatBy,{weekday:'short',month:'short',day:'numeric'})}</div></div><span className="muted">›</span></div>
+        <div className="meal-row"><span className="meal-icon">{icons[index%icons.length]}</span><div style={{flex:1}}><b>{m.name}</b><div className="muted" style={{fontSize:12}}>Eat by {formatDate(m.eatBy,{weekday:'short',month:'short',day:'numeric'})}</div></div><span className="muted">›</span></div>
       </button>
-    ))}
+      )
+    })}
     <div className="section-heading"><h2>Quick actions</h2></div>
     <div className="quick-grid">
       <button className="lime-card card" onClick={onAdd}><Plus size={20}/> Add a meal</button>
@@ -453,10 +456,10 @@ function PlannerScreen({meals,containers,selectedDay,setSelectedDay,onEdit,onAdd
         <div className="planner-section-heading"><h2>{category}</h2></div>
         {items.length?items.map(m=>{
           const c=containers.find(x=>x.id===m.containerId)
-          return <div className="schedule-row" key={m.id}><time>{formatTime(m.eatingTime).replace(' ',' ')}</time><article className="card planner-meal" style={{margin:0}}>
-            <button onClick={()=>onEdit(m)} style={{width:'100%',border:0,background:'transparent',textAlign:'left',color:'inherit',padding:0}}><b>{m.name}</b><div className="muted" style={{fontSize:12}}>{c?c.name:'No container assigned'} · {m.servings} serving{m.servings===1?'':'s'}</div></button>
+          return <article className="card planner-meal" key={m.id}>
+            <button onClick={()=>onEdit(m)} style={{width:'100%',border:0,background:'transparent',textAlign:'left',color:'inherit',padding:0}}><div className="planner-meal-title"><b>{m.name}</b><time>{formatTime(m.eatingTime)}</time></div><div className="muted" style={{fontSize:12}}>{c?c.name:'No container assigned'} · {m.servings} serving{m.servings===1?'':'s'}</div></button>
             <div className="planner-actions"><button onClick={()=>onSchedule(m)}>Reschedule</button><button onClick={()=>onRemoveSchedule(m)}>Remove</button></div>
-          </article></div>
+          </article>
         }):<button className="planner-empty" onClick={onAdd}><Plus size={16}/> Add {category.toLowerCase()}</button>}
       </section>
     })}
@@ -544,6 +547,18 @@ function NutritionScreen({meals,selectedDay,preferences}:{meals:Meal[];selectedD
       <span className="suggestion-icon">{s.icon==='hydration'?<Droplets size={20}/>:s.icon==='protein'?<Dumbbell size={20}/>:<Salad size={20}/>}</span>
       <div><b>{s.title}</b><p>{s.text}</p></div>
     </div>)}
+    <div className="section-heading popular-articles-heading"><h2>Popular articles</h2></div>
+    <div className="article-list">
+      <button className="article-card" onClick={()=>window.open('https://www.health.harvard.edu/nutrition', '_blank', 'noopener,noreferrer')}>
+        <span className="article-icon"><Leaf size={20}/></span><span><small>NUTRITION BASICS</small><b>Building a balanced lunch</b></span><span>›</span>
+      </button>
+      <button className="article-card" onClick={()=>window.open('https://www.health.harvard.edu/nutrition', '_blank', 'noopener,noreferrer')}>
+        <span className="article-icon"><Dumbbell size={20}/></span><span><small>PROTEIN</small><b>Easy ways to add protein variety</b></span><span>›</span>
+      </button>
+      <button className="article-card" onClick={()=>window.open('https://www.health.harvard.edu/nutrition', '_blank', 'noopener,noreferrer')}>
+        <span className="article-icon"><Droplets size={20}/></span><span><small>HYDRATION</small><b>A practical hydration guide</b></span><span>›</span>
+      </button>
+    </div>
     {preferences.avoid&&<p className="muted" style={{fontSize:12}}>Your avoid list is {preferences.avoid}. Always verify ingredient labels for allergens.</p>}
     <p className="muted" style={{fontSize:11}}>Nutritional values are estimates and are not medical guidance.</p>
     {goalsOpen&&<GoalsModal goals={goals} onClose={()=>setGoalsOpen(false)} onSave={(next)=>{setGoals(next);setGoalsOpen(false)}}/>}
