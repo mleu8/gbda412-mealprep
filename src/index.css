@@ -143,6 +143,9 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .suggestion-card b { font-size:13px; }
 .suggestion-card p { margin:4px 0 0; color:#69766f; font-size:12px; line-height:1.4; }
 .goals-modal { padding-bottom:24px; }
+.goal-setting-row { border-bottom:1px solid #ecece4; padding:10px 0 12px; margin-bottom:4px; }
+.goal-setting-label { min-height:44px; display:flex; align-items:center; justify-content:space-between; }
+.goal-setting-row .goal-field { margin:6px 0 0; }
 .goal-field div { display:grid; grid-template-columns:1fr 42px; align-items:center; }
 .goal-field div input { border-radius:12px 0 0 12px; border-right:0; }
 .goal-field div span { min-height:48px; border:1px solid #dde1d8; border-left:0; border-radius:0 12px 12px 0; background:#f3f5ef; display:grid; place-items:center; color:#7a857f; font-size:12px; }

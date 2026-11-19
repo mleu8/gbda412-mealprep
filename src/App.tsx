@@ -3,7 +3,7 @@ import {
   Apple, BatteryMedium, Bluetooth, CircleCheck, Clock3,
   Flame, Home, Leaf, Plus, Snowflake, Thermometer, Trash2,
   Utensils, X, CalendarDays, Container as ContainerIcon, Pencil,
-  Droplets, Dumbbell, Salad, Settings2, Soup, Sandwich, Cookie
+  Droplets, Dumbbell, Salad, Settings2, Soup, Sandwich, Cookie, SlidersHorizontal
 } from 'lucide-react'
 
 type Status = 'idle' | 'heating' | 'cooling' | 'offline'
@@ -483,7 +483,8 @@ function ScheduleModal({meal,onClose,onSave}:{meal:Meal;onClose:()=>void;onSave:
 }
 
 function NutritionScreen({meals,selectedDay,preferences}:{meals:Meal[];selectedDay:string;preferences:Preferences}) {
-  const [goals,setGoals]=useStored('prep.goals',{calories:2200,protein:110,carbs:260,fat:70})
+  const [goals,setGoals]=useStored('prep.goals',{calories:2200,protein:110,carbs:260,fat:70,'vitamin-c':90,'vitamin-a':900,'vitamin-d':20,iron:18})
+  const [goalEnabled,setGoalEnabled]=useStored('prep.goalEnabled',{calories:true,protein:true,carbs:true,fat:true,'vitamin-c':true,'vitamin-a':true,'vitamin-d':true,iron:true})
   const [visible,setVisible]=useStored('prep.visibleProgress',['calories','protein','carbs','fat','vitamin-c','vitamin-a','vitamin-d','iron'])
   const [goalsOpen,setGoalsOpen]=useState(false)
   const [progressOpen,setProgressOpen]=useState(false)
@@ -503,21 +504,22 @@ function NutritionScreen({meals,selectedDay,preferences}:{meals:Meal[];selectedD
     return result
   },[meals,selectedDay])
   const rows=[
-    ['Calories','calories',Math.round(totals.calories),goals.calories],
-    ['Protein','protein',Math.round(totals.protein),goals.protein],
-    ['Carbs','carbs',Math.round(totals.carbs),goals.carbs],
-    ['Fat','fat',Math.round(totals.fat),goals.fat],
-    ['Vitamin C','vitamin-c',Math.round(totals.protein*0.38),90],
-    ['Vitamin A','vitamin-a',Math.round(totals.protein*1.6),900],
-    ['Vitamin D','vitamin-d',3,20],
-    ['Iron','iron',Math.round(totals.protein*0.12),18],
+    ['Calories','calories',Math.round(totals.calories),goalEnabled.calories?goals.calories:undefined],
+    ['Protein','protein',Math.round(totals.protein),goalEnabled.protein?goals.protein:undefined],
+    ['Carbs','carbs',Math.round(totals.carbs),goalEnabled.carbs?goals.carbs:undefined],
+    ['Fat','fat',Math.round(totals.fat),goalEnabled.fat?goals.fat:undefined],
+    ['Vitamin C','vitamin-c',Math.round(totals.protein*0.38),goalEnabled['vitamin-c']?goals['vitamin-c']:undefined],
+    ['Vitamin A','vitamin-a',Math.round(totals.protein*1.6),goalEnabled['vitamin-a']?goals['vitamin-a']:undefined],
+    ['Vitamin D','vitamin-d',3,goalEnabled['vitamin-d']?goals['vitamin-d']:undefined],
+    ['Iron','iron',Math.round(totals.protein*0.12),goalEnabled.iron?goals.iron:undefined],
   ] as const
-  const balanceScore=Math.max(0,Math.min(100,Math.round(
-    rows.reduce((sum,[, ,value,goal])=>{
-      const ratio=goal>0?value/goal:0
+  const goalRows=rows.filter(([, , ,goal])=>goal!==undefined)
+  const balanceScore=goalRows.length ? Math.max(0,Math.min(100,Math.round(
+    goalRows.reduce((sum,[, ,value,goal])=>{
+      const ratio=goal && goal>0?value/goal:0
       return sum + Math.max(0,100-Math.abs(100-ratio*100)*1.15)
-    },0)/rows.length)
-  ))
+    },0)/goalRows.length)
+  )) : 0
   const dietaryText=preferences.dietary.join(', ')
   const suggestions=[
     ...(dietaryText.includes('Vegetarian')||dietaryText.includes('Vegan')?[{title:'Add a tofu protein source',text:'Try edamame, tofu, or black beans for a satisfying plant-based boost.',icon:'protein'}]:[]),
@@ -530,14 +532,15 @@ function NutritionScreen({meals,selectedDay,preferences}:{meals:Meal[];selectedD
       <div className="balance-score-row">
         <div><div className="eyebrow">Meal balance score</div><h2>{balanceScore}<span>/100</span></h2><p>Based on today's scheduled meals</p></div>
         <div className="balance-actions">
+          <button onClick={()=>setProgressOpen(true)} aria-label="Choose visible progress sections"><SlidersHorizontal size={17}/></button>
           <button onClick={()=>setGoalsOpen(true)} aria-label="Edit daily goals"><Settings2 size={17}/></button>
         </div>
       </div>
       <div className="balance-progress-heading"><span>Daily progress</span></div>
       <div className="balance-progress-list">
         {rows.filter(([,key])=>visible.includes(key)).map(([label,key,value,goal],index,visibleRows)=><div className={`balance-progress-card ${visibleRows.length%2===1&&index===visibleRows.length-1?'full-width':''}`} key={key}>
-          <div className="progress-card-head"><span className={`progress-icon ${key}`}>{key==='calories'?<Flame size={16}/>:key==='protein'?<Dumbbell size={16}/>:key==='carbs'?<Apple size={16}/>:<Leaf size={16}/>}</span><b>{label}</b><span>{value} <small>/ {goal}{key==='calories'?' kcal':key==='vitamin-c'||key==='iron'?' mg':key==='vitamin-a'||key==='vitamin-d'?' mcg':' g'}</small></span></div>
-          <div className="progress-track"><div className={`progress-fill ${key}`} style={{width:`${Math.min(100,value/goal*100)}%`}}/></div>
+          <div className="progress-card-head"><span className={`progress-icon ${key}`}>{key==='calories'?<Flame size={16}/>:key==='protein'?<Dumbbell size={16}/>:key==='carbs'?<Apple size={16}/>:<Leaf size={16}/>}</span><b>{label}</b><span>{value}{goal!==undefined&&<small> / {goal}{key==='calories'?' kcal':key==='vitamin-c'||key==='iron'?' mg':key==='vitamin-a'||key==='vitamin-d'?' mcg':' g'}</small>}</span></div>
+          <div className="progress-track">{goal!==undefined&&<div className={`progress-fill ${key}`} style={{width:`${Math.min(100,value/goal*100)}%`}}/>}</div>
         </div>)}
         {!visible.length&&<div className="balance-empty">Choose a metric in Progress settings.</div>}
       </div>
@@ -561,7 +564,7 @@ function NutritionScreen({meals,selectedDay,preferences}:{meals:Meal[];selectedD
     </div>
     {preferences.avoid&&<p className="muted" style={{fontSize:12}}>Your avoid list is {preferences.avoid}. Always verify ingredient labels for allergens.</p>}
     <p className="muted" style={{fontSize:11}}>Nutritional values are estimates and are not medical guidance.</p>
-    {goalsOpen&&<GoalsModal goals={goals} onClose={()=>setGoalsOpen(false)} onSave={(next)=>{setGoals(next);setGoalsOpen(false)}}/>}
+    {goalsOpen&&<GoalsModal goals={goals} enabled={goalEnabled} onClose={()=>setGoalsOpen(false)} onSave={(next)=>{setGoals(next.goals);setGoalEnabled(next.enabled);setGoalsOpen(false)}}/>}
     {progressOpen&&<ProgressSettingsModal visible={visible} onClose={()=>setProgressOpen(false)} onChange={setVisible}/>}
   </div>
 }
@@ -589,19 +592,30 @@ function ProgressSettingsModal({visible,onClose,onChange}:{visible:string[];onCl
   </div>
 }
 
-function GoalsModal({goals,onClose,onSave}:{goals:{calories:number;protein:number;carbs:number;fat:number};onClose:()=>void;onSave:(goals:{calories:number;protein:number;carbs:number;fat:number})=>void}) {
+type NutritionGoals = Record<'calories'|'protein'|'carbs'|'fat'|'vitamin-c'|'vitamin-a'|'vitamin-d'|'iron',number>
+type GoalEnabled = Record<'calories'|'protein'|'carbs'|'fat'|'vitamin-c'|'vitamin-a'|'vitamin-d'|'iron',boolean>
+
+function GoalsModal({goals,enabled,onClose,onSave}:{goals:NutritionGoals;enabled:GoalEnabled;onClose:()=>void;onSave:(value:{goals:NutritionGoals;enabled:GoalEnabled})=>void}) {
   const [draft,setDraft]=useState(goals)
+  const [draftEnabled,setDraftEnabled]=useState(enabled)
   const fields=[
     ['calories','Calories','kcal'],
     ['protein','Protein','g'],
     ['carbs','Carbohydrates','g'],
     ['fat','Fat','g'],
+    ['vitamin-c','Vitamin C','mg'],
+    ['vitamin-a','Vitamin A','mcg'],
+    ['vitamin-d','Vitamin D','mcg'],
+    ['iron','Iron','mg'],
   ] as const
   return <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Edit daily goals">
     <section className="modal goals-modal">
       <div className="modal-header"><button className="icon-button" onClick={onClose} aria-label="Close"><X/></button><b>Edit daily goals</b><span/></div>
-      {fields.map(([key,label,unit])=><div className="field goal-field" key={key}><label htmlFor={`goal-${key}`}>{label}</label><div><input id={`goal-${key}`} type="number" min="1" value={draft[key]} onChange={e=>setDraft(v=>({...v,[key]:Number(e.target.value)||1}))}/><span>{unit}</span></div></div>)}
-      <button className="primary-button" style={{width:'100%',marginTop:4}} onClick={()=>onSave(draft)}>Save goals</button>
+      {fields.map(([key,label,unit])=>{const isEnabled=draftEnabled[key];return <div className="goal-setting-row" key={key}>
+        <div className="goal-setting-label"><b>{label}</b><button className={`toggle ${isEnabled?'on':''}`} aria-label={`${isEnabled?'Disable':'Enable'} ${label} goal`} onClick={()=>setDraftEnabled(v=>({...v,[key]:!v[key]}))}><span/></button></div>
+        {isEnabled&&<div className="field goal-field"><label htmlFor={`goal-${key}`}>Daily goal</label><div><input id={`goal-${key}`} type="number" min="1" value={draft[key]} onChange={e=>setDraft(v=>({...v,[key]:Number(e.target.value)||1}))}/><span>{unit}</span></div></div>}
+      </div>})}
+      <button className="primary-button" style={{width:'100%',marginTop:4}} onClick={()=>onSave({goals:draft,enabled:draftEnabled})}>Save goals</button>
     </section>
   </div>
 }
